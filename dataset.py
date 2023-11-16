@@ -1,6 +1,7 @@
 from copy import copy
 from glob import glob
 import math
+import statistics
 import os
 import re
 
@@ -216,6 +217,13 @@ class ARDSDataset(Dataset):
 
 
 class PVADataset(Dataset):
+    training_set_evaluated = False
+    coeff_calculated = False
+    flow_mu = 0
+    flow_std = 0
+    pressure_mu = 0
+    pressure_std = 0
+
     def __init__(self, dataset_type, sequence_len):
         """
         Extract breath data and corresponding PVA annotations
@@ -225,11 +233,19 @@ class PVADataset(Dataset):
         """
         if dataset_type not in ['train', 'val', 'test']:
             raise Exception('dataset_type must be either "train", "val", or "test"')
+        
+        # Raise exception if training dataset has not been loaded
+        if dataset_type != 'train' and self.__class__.training_set_evaluated == False:
+            raise Exception('please load "train" dataset prior to other datasets')
+        elif dataset_type == 'train':
+            self.__class__.training_set_evaluated = True
 
         dataset_path = os.path.join(os.path.dirname(__file__), 'pva_dataset', dataset_type)
         self.record_set = glob(os.path.join(dataset_path, '*_data.pkl'))
         self.all_sequences = []
         self.sequence_len = sequence_len
+
+
 
     def process_dataset(self):
         """
@@ -251,10 +267,15 @@ class PVADataset(Dataset):
                 else:
                     y = [1, 0, 0]
 
+                self.flow_idx = 0
+                self.pressure_idx = 1
                 tensor = np.array([b['flow'], b['pressure']]).transpose()
                 self.all_sequences.append([patient, tensor, np.array(y)])
 
-        self.find_scaling_coefs()
+        # Only evaluation coefficients if it has not been done before
+        if self.__class__.coeff_calculated == False:
+            self.find_scaling_coefs()
+            self.__class__.coeff_calculated = True
 
     def find_scaling_coefs(self):
         """
@@ -264,7 +285,50 @@ class PVADataset(Dataset):
         into a machine-usable format
         """
         # write function for finding the scaling coefficients
-        raise Exception('you need to code me before things will run')
+        tensor_idx = 1
+
+        flow_mu_sum = 0
+        flow_std_sum = 0
+        flow_count = 0
+
+        pressure_mu_sum = 0
+        pressure_std_sum = 0
+        pressure_count = 0
+
+        # Calculate Mean
+        for breath_data in self.all_sequences:
+            # print(len(breath_data))
+            # print(breath_data[0])
+            # print(breath_data[1].shape)
+            # print(breath_data[2].shape)
+
+            flow = breath_data[tensor_idx][:, self.flow_idx]
+            pressure = breath_data[tensor_idx][:, self.pressure_idx]
+
+            flow_count += len(flow)
+            flow_mu_sum += flow.sum()
+
+            pressure_count += len(pressure)
+            pressure_mu_sum += pressure.sum()
+
+        self.__class__.flow_mu = flow_mu_sum / flow_count
+        print('flow mean: ', self.__class__.flow_mu)
+        self.__class__.pressure_mu = pressure_mu_sum / pressure_count
+        print('pressure mean: ', self.__class__.pressure_mu)
+
+        # Calculate Standard Deviation
+        for breath_data in self.all_sequences:
+            flow = breath_data[tensor_idx][:, self.flow_idx]
+            pressure = breath_data[tensor_idx][:, self.pressure_idx]
+
+            flow_std_sum += ((flow - self.flow_mu) ** 2).sum()
+            pressure_std_sum += ((pressure - self.pressure_mu) ** 2).sum()
+        
+        self.__class__.flow_std = np.sqrt(flow_std_sum / flow_count)
+        print('flow std: ', self.__class__.flow_std)
+        self.__class__.pressure_std = np.sqrt(pressure_std_sum / pressure_count)
+        print('pressure std: ', self.__class__.pressure_std)
+        # raise Exception('you need to code me ("find_scaling_coefs") before things will run')
 
     def scale_breath(self, data):
         """
@@ -272,7 +336,14 @@ class PVADataset(Dataset):
         this class. You can use standardization, max-min scaling, or
         anything else that you'd like to code
         """
-        raise Exception('you need to code me before things will run')
+        # Standardize Flow Data
+        data[:, self.flow_idx] = (data[:, self.flow_idx] - self.flow_mu) / self.flow_std
+
+        # Standardize Pressure Data
+        data[:, self.pressure_idx] = (data[:, self.pressure_idx] - self.pressure_mu) / self.pressure_idx
+
+        return data
+        # raise Exception('you need to code me ("scale_breath") before things will run')
 
     def pad_or_cut_breath(self, data):
         """
@@ -282,7 +353,7 @@ class PVADataset(Dataset):
         desired length. It could also mean removing observations from a
         sequence if the data is longer than desired length
         """
-        raise Exception('you need to code me before things will run')
+        raise Exception('you need to code me ("pad_or_cut_breath") before things will run')
 
     def __getitem__(self, idx):
         """
