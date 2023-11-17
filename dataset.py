@@ -302,15 +302,18 @@ class PVADataset(Dataset):
             # print(breath_data[1].shape)
             # print(breath_data[2].shape)
 
+            # Load Flow and Pressure per breath
             flow = breath_data[tensor_idx][:, self.flow_idx]
             pressure = breath_data[tensor_idx][:, self.pressure_idx]
 
+            # Obtain length and sum of Flow and Pressure data
             flow_count += len(flow)
             flow_mu_sum += flow.sum()
 
             pressure_count += len(pressure)
             pressure_mu_sum += pressure.sum()
 
+        # Calculate the mean (mu) of Flow and Pressure
         self.__class__.flow_mu = flow_mu_sum / flow_count
         print('flow mean: ', self.__class__.flow_mu)
         self.__class__.pressure_mu = pressure_mu_sum / pressure_count
@@ -318,12 +321,16 @@ class PVADataset(Dataset):
 
         # Calculate Standard Deviation
         for breath_data in self.all_sequences:
+
+            # Load Flow and Pressure per breath
             flow = breath_data[tensor_idx][:, self.flow_idx]
             pressure = breath_data[tensor_idx][:, self.pressure_idx]
 
-            flow_std_sum += ((flow - self.flow_mu) ** 2).sum()
-            pressure_std_sum += ((pressure - self.pressure_mu) ** 2).sum()
+            # Calculate the sum of each datapoint subtracted by the mean squared
+            flow_std_sum += ((flow - self.__class__.flow_mu) ** 2).sum()
+            pressure_std_sum += ((pressure - self.__class__.pressure_mu) ** 2).sum()
         
+        # Calculate the standard deviation by dividing by the number of datapoints and taking the square root
         self.__class__.flow_std = np.sqrt(flow_std_sum / flow_count)
         print('flow std: ', self.__class__.flow_std)
         self.__class__.pressure_std = np.sqrt(pressure_std_sum / pressure_count)
@@ -337,10 +344,10 @@ class PVADataset(Dataset):
         anything else that you'd like to code
         """
         # Standardize Flow Data
-        data[:, self.flow_idx] = (data[:, self.flow_idx] - self.flow_mu) / self.flow_std
+        data[:, self.flow_idx] = (data[:, self.flow_idx] - self.__class__.flow_mu) / self.__class__.flow_std
 
         # Standardize Pressure Data
-        data[:, self.pressure_idx] = (data[:, self.pressure_idx] - self.pressure_mu) / self.pressure_idx
+        data[:, self.pressure_idx] = (data[:, self.pressure_idx] - self.__class__.pressure_mu) / self.__class__.pressure_std
 
         return data
         # raise Exception('you need to code me ("scale_breath") before things will run')
@@ -353,7 +360,46 @@ class PVADataset(Dataset):
         desired length. It could also mean removing observations from a
         sequence if the data is longer than desired length
         """
-        raise Exception('you need to code me ("pad_or_cut_breath") before things will run')
+        reshaped_data = []
+        data_len = len(data[:, self.flow_idx])
+
+        # If the length of the data is less than the desired sequence length
+        if data_len < self.sequence_len:
+
+            # Determine the remaining length to pad on either side (rounded down)
+            pad_len = int((self.sequence_len - data_len) / 2)
+
+            # For flow and pressure add padding
+            for idx in range(np.shape(data)[1]):
+                padded = data[:, idx]
+                padded = np.pad(padded, (pad_len, ))
+
+                # If the length of the padding is still less than the sequence length, add an extra zero at the end
+                if len(padded) < self.sequence_len:
+                    padded = np.append(padded, [0])
+
+                # Load the reshaped data
+                reshaped_data.append(padded)
+
+            # Transpose the data
+            reshaped_data = np.array(reshaped_data).transpose()
+
+        # If the data length is greater than the sequence length
+        elif data_len > self.sequence_len:
+
+            # For flow and pressure remove the end points up to the desired length
+            for idx in range(np.shape(data)[1]):
+                shrunk = data[:self.sequence_len, idx]
+                reshaped_data.append(shrunk)
+
+            reshaped_data = np.array(reshaped_data).transpose()
+        
+        else:
+            return data
+            
+        
+        return reshaped_data
+        # raise Exception('you need to code me ("pad_or_cut_breath") before things will run')
 
     def __getitem__(self, idx):
         """

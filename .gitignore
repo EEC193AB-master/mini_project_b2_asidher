@@ -4,3 +4,4 @@ data/
 pva_dataset/
 Dockerfile
 *.png
+*.pkl
