@@ -180,7 +180,7 @@ class ARDSDataset(Dataset):
 
     def __getitem__(self, index):
         seq = self.all_sequences[index]
-        pt, data, target = seq
+        pt, data, target, _ = seq
         try:
             mu, std = self.scaling_factors[None]
         except AttributeError:
@@ -203,7 +203,7 @@ class ARDSDataset(Dataset):
         return pd.DataFrame(rows, columns=['patient', 'y'])
 
     def _get_patient_id_from_file(self, filename):
-        pt_id = filename.split('/')[-2]
+        pt_id = filename.split('\\')[-2]
         # sanity check to see if patient
         match = re.search(r'(0\d{3}RPI\d{10})', filename)
         if match:
@@ -343,6 +343,12 @@ class PVADataset(Dataset):
         this class. You can use standardization, max-min scaling, or
         anything else that you'd like to code
         """
+        # print('flow mean: ', self.__class__.flow_mu)
+        # print('flow std: ', self.__class__.flow_std)
+        # print('pressure mean: ', self.__class__.pressure_mu)
+        # print('pressure std: ', self.__class__.pressure_std)
+
+        
         # Standardize Flow Data
         data[:, self.flow_idx] = (data[:, self.flow_idx] - self.__class__.flow_mu) / self.__class__.flow_std
 
@@ -405,10 +411,15 @@ class PVADataset(Dataset):
         """
         get next sequence
         """
-        pt, data, y = self.all_sequences[idx]
+        pt, x, y = self.all_sequences[idx]
+
+        data = x.copy()
+        labels = y.copy()
+
         data = self.scale_breath(data)
         data = self.pad_or_cut_breath(data)
-        return data, y
+        
+        return data, labels
 
     def __len__(self):
         return len(self.all_sequences)
