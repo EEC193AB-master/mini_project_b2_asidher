@@ -13,11 +13,10 @@ class CNNLSTMNetwork(nn.Module):
         self.output_size = 2
         self.input_size = 128 # input_size derived from size of cnn `outputs`
         
-        self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=lstm_hidden_units, num_layers=lstm_layers, dropout=lstm_dropout)
+        self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=lstm_hidden_units, num_layers=lstm_layers, dropout=lstm_dropout, batch_first=True)
         self.fc = nn.Linear(self.lstm_hidden_units, self.output_size)
 
     def forward(self, x, hx_cx=None):
-        seq_len = x.shape[1]
         batch_size = x.shape[0]
 
         if hx_cx is None:
@@ -31,18 +30,23 @@ class CNNLSTMNetwork(nn.Module):
         outputs = self.cnn(x[0]).squeeze()
         outputs = outputs.unsqueeze(dim=0)
 
+        # Initialize the lstm_output for the first batch output from the CNN
+        lstm_output, (hx, cx) = self.lstm(outputs[0], (hx, cx))
+        lstm_output = lstm_output.unsqueeze(dim=0)
         
+        # For each batch, extract features for the 20 breaths via the CNN and then feed into LSTM
         for i in range(1, batches):
             block_out = self.cnn(x[i]).squeeze()
             block_out = block_out.unsqueeze(dim=0)
             outputs = torch.cat([outputs, block_out], dim=0)
+ 
+            # For each block out of CNN, run LSTM
+            lstm_block_out, (hx, cx) = self.lstm(block_out[0], (hx, cx))
 
-        for i in reversed(range(1, seq_len)):
+            # Store LSTM results for fully connected layer
+            lstm_block_out = lstm_block_out.unsqueeze(dim=0)
+            lstm_output = torch.cat([lstm_output, lstm_block_out], dim=0)
 
-            output, (hx, cx) = self.lstm(outputs[:, -i, :], (hx, cx))
-
-        output = self.fc(output)
-
-        # output = torch.sum(output, 1) / output.size(1)
+        output = self.fc(lstm_output[:, -1, :])
 
         return output
