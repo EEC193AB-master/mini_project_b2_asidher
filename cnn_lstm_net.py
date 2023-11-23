@@ -13,7 +13,7 @@ class CNNLSTMNetwork(nn.Module):
         self.output_size = 2
         self.input_size = 128 # input_size derived from size of cnn `outputs`
         
-        self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=lstm_hidden_units, num_layers=lstm_layers, dropout=lstm_dropout, batch_first=True)
+        self.lstm = nn.LSTM(input_size=self.input_size, hidden_size=lstm_hidden_units, num_layers=lstm_layers, dropout=lstm_dropout)
         self.fc = nn.Linear(self.lstm_hidden_units, self.output_size)
 
     def forward(self, x, hx_cx=None):

@@ -1,5 +1,6 @@
 # mini_project_b2_asidher
 
+Discussion questions answered in 'Discussion' sections of 'lab_b2.ipynb'.
 
 ## References:
 
